@@ -1,5 +1,10 @@
+#ifdef HAVE_CONFIG_H
+#include "../config.h"
+#endif
+
 #define _GNU_SOURCE
 #include <gtk/gtk.h>
+#include <glib/gi18n-lib.h>
 #include <GL/freeglut.h>
 #include <FTGL/ftgl.h>
 #include <wand/MagickWand.h>
@@ -514,11 +519,11 @@ print_view (GtkWidget *widget, gpointer data)
 {
   molecule_s *molecule = data;
    GtkWidget *dialog =
-    gtk_file_chooser_dialog_new ("Print molecule",
+     gtk_file_chooser_dialog_new (_("Print molecule"),
 				 GTK_WINDOW (molecule_window (molecule)),
 				 GTK_FILE_CHOOSER_ACTION_SAVE,
-				 "Accept", GTK_RESPONSE_ACCEPT,
-				 "Cancel", GTK_RESPONSE_CANCEL,
+				  _ ("Accept"), GTK_RESPONSE_ACCEPT,
+				  _ ("Cancel"), GTK_RESPONSE_CANCEL,
 				 NULL);
   gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
   gtk_dialog_set_default_response (GTK_DIALOG (dialog),
@@ -534,7 +539,7 @@ print_view (GtkWidget *widget, gpointer data)
 				GTK_DIALOG_MODAL,
 				GTK_MESSAGE_QUESTION,
 				GTK_BUTTONS_YES_NO,
-				"File %s exists.  Overwrite it?",
+				_ ("File %s exists.  Overwrite it?"),
 				file);
       gtk_widget_show_all (dialogq);
       response = gtk_dialog_run (GTK_DIALOG (dialogq));
@@ -751,11 +756,11 @@ import_view (GtkWidget *widget, gpointer data)
   gtk_file_filter_add_pattern (filter, "*.xyz");
   
   GtkWidget *dialog =
-    gtk_file_chooser_dialog_new ("Save image",
+    gtk_file_chooser_dialog_new (_ ("Import XYZ file"),
 				 GTK_WINDOW (window),
 				 GTK_FILE_CHOOSER_ACTION_OPEN,
-				 "Accept", GTK_RESPONSE_ACCEPT,
-				 "Cancel", GTK_RESPONSE_CANCEL,
+				 _ ("Accept"), GTK_RESPONSE_ACCEPT,
+				 _ ("Cancel"), GTK_RESPONSE_CANCEL,
 				 NULL);
   gtk_file_chooser_set_select_multiple (GTK_FILE_CHOOSER (dialog), TRUE);
   gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
@@ -786,11 +791,11 @@ export_view (GtkWidget *widget, gpointer data)
   molecule_s *molecule = data;
 
   GtkWidget *dialog =
-    gtk_file_chooser_dialog_new ("Save image",
+    gtk_file_chooser_dialog_new (_ ("Export image"),
 				 GTK_WINDOW (molecule_window (molecule)),
 				 GTK_FILE_CHOOSER_ACTION_SAVE,
-				 "Accept", GTK_RESPONSE_ACCEPT,
-				 "Cancel", GTK_RESPONSE_CANCEL,
+				 _ ("Accept"), GTK_RESPONSE_ACCEPT,
+				 _ ("Cancel"), GTK_RESPONSE_CANCEL,
 				 NULL);
   gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
   gtk_dialog_set_default_response (GTK_DIALOG (dialog),
@@ -806,7 +811,7 @@ export_view (GtkWidget *widget, gpointer data)
 				GTK_DIALOG_MODAL,
 				GTK_MESSAGE_QUESTION,
 				GTK_BUTTONS_YES_NO,
-				"File %s exists.  Overwrite it?",
+				_ ("File %s exists.  Overwrite it?"),
 				file);
       gtk_widget_show_all (dialogq);
       response = gtk_dialog_run (GTK_DIALOG (dialogq));
@@ -890,11 +895,11 @@ open_molecule_window (gpointer data, gpointer user_data)
     /********* file menu ********/
 
     menu = gtk_menu_new();
-    item = gtk_menu_item_new_with_label ("File");
+    item = gtk_menu_item_new_with_label (_ ("File"));
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (item), menu);
     gtk_menu_shell_append (GTK_MENU_SHELL (menubar), item);
 
-    item = gtk_menu_item_new_with_label ("Import XYZ...");
+    item = gtk_menu_item_new_with_label (_ ("Import XYZ..."));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (import_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
@@ -902,17 +907,17 @@ open_molecule_window (gpointer data, gpointer user_data)
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Export view...");
+    item = gtk_menu_item_new_with_label (_ ("Export view..."));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (export_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Snapshot SGI");
+    item = gtk_menu_item_new_with_label (_ ("Snapshot SGI"));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (export_sgi), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Print view...");
+    item = gtk_menu_item_new_with_label (_ ("Print view..."));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (print_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
@@ -920,7 +925,7 @@ open_molecule_window (gpointer data, gpointer user_data)
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Close view");
+    item = gtk_menu_item_new_with_label (_ ("Close view"));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (close_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
@@ -1048,7 +1053,8 @@ main (int ac, char *av[])
   GOptionEntry entries[] = {
     { NULL }
   };
-  GOptionContext *context = g_option_context_new ("string string string...");
+  GOptionContext *context =
+    g_option_context_new (_ ("string string string..."));
   g_option_context_add_main_entries (context, entries, NULL);
   g_option_context_add_group (context, gtk_get_option_group (TRUE));
   
@@ -1060,7 +1066,7 @@ main (int ac, char *av[])
 			      G_TYPE_POINTER);
 
   if (!g_option_context_parse (context, &ac, &av, &error)) {
-    g_warning ("option parsing failed: %s\n", error->message);
+    g_warning (_ ("option parsing failed: %s\n"), error->message);
     g_clear_error (&error);
   }
   
@@ -1116,11 +1122,11 @@ main (int ac, char *av[])
     /********* file menu ********/
 
     menu = gtk_menu_new();
-    item = gtk_menu_item_new_with_label ("File");
+    item = gtk_menu_item_new_with_label (_ ("File"));
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (item), menu);
     gtk_menu_shell_append (GTK_MENU_SHELL (menubar), item);
 
-    item = gtk_menu_item_new_with_label ("Import XYZ...");
+    item = gtk_menu_item_new_with_label (_ ("Import XYZ..."));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (import_view), window);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
@@ -1128,7 +1134,7 @@ main (int ac, char *av[])
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Export all");
+    item = gtk_menu_item_new_with_label (_ ("Export all"));
     g_signal_connect (G_OBJECT (item), "activate",
 		      G_CALLBACK (export_all), NULL);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
@@ -1136,9 +1142,9 @@ main (int ac, char *av[])
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Quit");
+    item = gtk_menu_item_new_with_label (_ ("Quit"));
     g_signal_connect (G_OBJECT (item), "activate",
-		      G_CALLBACK (gtk_widget_destroy), window);
+		      G_CALLBACK (gmol_quit), window);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
     gtk_box_pack_start (GTK_BOX (vbox), GTK_WIDGET (menubar),
@@ -1160,7 +1166,7 @@ main (int ac, char *av[])
      GtkTreeViewColumn *column;
      
      renderer = gtk_cell_renderer_text_new ();
-     column = gtk_tree_view_column_new_with_attributes ("Name",
+     column = gtk_tree_view_column_new_with_attributes (_ ("Name"),
 							renderer,
 							"text",
 							COLUMN_NAME,
@@ -1168,7 +1174,7 @@ main (int ac, char *av[])
      gtk_tree_view_append_column (GTK_TREE_VIEW (tree), column);
      
      renderer = gtk_cell_renderer_text_new ();
-     column = gtk_tree_view_column_new_with_attributes ("Description",
+     column = gtk_tree_view_column_new_with_attributes (_ ("Description"),
 							renderer,
 							"text",
 							COLUMN_COMMENT,

@@ -2,6 +2,12 @@ AC_INIT([gmol], [1.0], [moller@mollerware.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC
 AM_PROG_CC_C_O
+
+GETTEXT_PACKAGE=gtk30
+AC_SUBST(GETTEXT_PACKAGE)
+AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE, "$GETTEXT_PACKAGE",
+                   [The prefix for our gettext translation domains.])
+
 AC_CONFIG_HEADERS([config.h])
 
 AM_MAINTAINER_MODE([enable])

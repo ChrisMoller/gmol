@@ -39,7 +39,7 @@ static GSList 		*molecules	= NULL;
 #define rad_to_deg(r) (((r) * 180.0) / M_PI)
 
 // for ftgl 
-static FTGLfont *font[3];
+static FTGLfont *font[3] = {NULL, NULL, NULL};
 static int fontindex = 1;
 #define FONT_FILE	"/usr/share/fonts/dejavu/DejaVuSerif.ttf"
 
@@ -236,7 +236,7 @@ draw_atom (gpointer data, gpointer user_data)
   glColor3d (0.0, 1.0, 1.0);
   glRotated (rotation->theta, rotation->x, rotation->y, rotation->z);
   glTranslated (0.0, 0.0, AR_SCALE * tp_ar (rad));
-  glScaled ( FONT_SCALE,  FONT_SCALE,  FONT_SCALE);
+  glScaled (FONT_SCALE,  FONT_SCALE,  FONT_SCALE);
 
   float bounds[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   ftglGetFontBBox (font[fontindex], atom_name (atom), -1, bounds);
@@ -463,16 +463,16 @@ read_file (gchar *fn)
   return molecule;
 }
 
-#if 0
+#if 1
 static void
-dump_atom (gpointer data, gpointer user_data)
+print_atom (gpointer data, gpointer user_data)
 {
   atom_s *atom = data;
   g_print ("    Atom: %s\n", atom_name (atom));
 }
 
 static void
-dump_bond (gpointer data, gpointer user_data)
+print_bond (gpointer data, gpointer user_data)
 {
   bond_s *bond = data;
   bond_e atype = bond_type (bond);
@@ -483,14 +483,14 @@ dump_bond (gpointer data, gpointer user_data)
 }
 
 static void
-dump_molecule (gpointer data, gpointer user_data)
+print_molecule (gpointer data, gpointer user_data)
 {
-  molecule_s *molecule = data;
+  molecule_s *molecule = user_data;
   g_print ("  Comment: %s\n", molecule_comment (molecule) ?: "<>");
   if (molecule_atoms (molecule))
-    g_slist_foreach (molecule_atoms (molecule), dump_atom, NULL);
+    g_slist_foreach (molecule_atoms (molecule), print_atom, NULL);
   if (molecule_bonds (molecule))
-    g_slist_foreach (molecule_bonds (molecule), dump_bond, NULL);
+    g_slist_foreach (molecule_bonds (molecule), print_bond, NULL);
 }
 #endif
 
@@ -582,7 +582,6 @@ button_press (GtkWidget *widget,
 }
 #endif
 
-#if 0
 static void
 free_bond (gpointer data)
 {
@@ -615,7 +614,17 @@ free_molecule (gpointer data)
     free (molecule);
   }
 }
-#endif
+
+static void
+gmol_quit (GtkWidget *widget, gpointer data)
+{
+  g_slist_free_full (molecules, free_molecule);
+
+  for (int i = 0; i < 3; i++)
+    if (font[i]) ftglDestroyFont (font[i]);
+  
+  gtk_main_quit ();
+}
 
 static void
 dump_view (molecule_s *molecule, const char *fname)
@@ -850,6 +859,11 @@ open_molecule_window (gpointer data, gpointer user_data)
 		      G_CALLBACK (export_sgi), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
+    item = gtk_menu_item_new_with_label ("Print");
+    g_signal_connect (G_OBJECT (item), "activate",
+		      G_CALLBACK (print_molecule), molecule);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
@@ -1000,19 +1014,21 @@ main (int ac, char *av[])
   glutInit (&ac, av);
 
   font[0] = ftglCreateExtrudeFont (FONT_FILE);
-  font[1] = ftglCreateBufferFont (FONT_FILE);
-  font[2] = ftglCreateOutlineFont (FONT_FILE);
-
   ftglSetFontFaceSize (font[0], 80.0, 72.0);
   ftglSetFontDepth (font[0], 10.0);
   //  ftglSetFontOutset (font[0], 0, 3);
   ftglSetFontCharMap (font[0], ft_encoding_unicode);
 
+#if 0
+  font[1] = ftglCreateBufferFont (FONT_FILE);
   ftglSetFontFaceSize (font[1], 80.0, 72.0);
   ftglSetFontCharMap (font[1], ft_encoding_unicode);
 
+  font[2] = ftglCreateOutlineFont (FONT_FILE);
   ftglSetFontFaceSize (font[2], 80.0, 72.0);
   ftglSetFontCharMap (font[2], ft_encoding_unicode);
+#endif
+
   fontindex = 0;
 
   for (int i = 1; i < ac; i++) read_file (av[i]);
@@ -1032,7 +1048,7 @@ main (int ac, char *av[])
   gtk_window_set_default_size (GTK_WINDOW (window), 256, 256);
   gtk_window_set_title (GTK_WINDOW (window), "gmol");
 
-  g_signal_connect (window, "destroy", G_CALLBACK (gtk_main_quit), NULL);
+  g_signal_connect (window, "destroy", G_CALLBACK (gmol_quit), NULL);
 
   GtkWidget *vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 8);
   gtk_container_add (GTK_CONTAINER (window), vbox);

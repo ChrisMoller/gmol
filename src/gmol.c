@@ -364,6 +364,7 @@ read_file (gchar *fn)
 #define SYM_LEN	8
 	  char sym[SYM_LEN];		// place to hold the element symbol
 	  atom_s *atom = malloc (sizeof(atom_s));	// create an atom record
+	  atom_seq (atom) = i;
 	  sym[0] = 0;				// initialise the symbol
 	  int ct = fscanf (xyz, " %8s %lf %lf %lf%*[^\n]\n",
 			   sym,		// read and parse the atom symbol
@@ -463,36 +464,88 @@ read_file (gchar *fn)
   return molecule;
 }
 
-#if 1
 static void
 print_atom (gpointer data, gpointer user_data)
 {
   atom_s *atom = data;
-  g_print ("    Atom: %s\n", atom_name (atom));
+  FILE *file = user_data;
+  fprintf (file, "    Atom: [%2d] %s\n", atom_seq (atom), atom_name (atom));
 }
 
 static void
 print_bond (gpointer data, gpointer user_data)
 {
   bond_s *bond = data;
-  bond_e atype = bond_type (bond);
+  FILE *file = user_data;
+  char   *btype = "";
   atom_s *atoma = bond_a (bond);
   atom_s *atomb = bond_b (bond);
-  g_print ("    Bond: %d %s-%s\n",
-	   atype, atom_name (atoma), atom_name (atomb));
+  switch (bond_type (bond)) {
+  case BOND_NONE:   btype = " x "; break;
+  case BOND_SINGLE: btype = "<->"; break;
+  case BOND_DOUBLE: btype = "<=>"; break;
+  case BOND_TRIPLE: btype = "<#>"; break;
+  }
+  fprintf (file, "    Bond: [%2d] %s %s [%2d] %s\n",
+	  atom_seq (atoma), atom_name (atoma),
+	  btype,
+	  atom_seq (atomb), atom_name (atomb));
 }
 
 static void
-print_molecule (gpointer data, gpointer user_data)
+print_molecule (molecule_s *molecule, gchar *fn)
 {
-  molecule_s *molecule = user_data;
-  g_print ("  Comment: %s\n", molecule_comment (molecule) ?: "<>");
-  if (molecule_atoms (molecule))
-    g_slist_foreach (molecule_atoms (molecule), print_atom, NULL);
-  if (molecule_bonds (molecule))
-    g_slist_foreach (molecule_bonds (molecule), print_bond, NULL);
+  FILE *file = fopen (fn, "w");
+  if (file) {
+    fprintf (file, "  Comment: %s\n", molecule_comment (molecule) ?: "<>");
+    if (molecule_atoms (molecule))
+      g_slist_foreach (molecule_atoms (molecule), print_atom, file);
+    if (molecule_bonds (molecule))
+      g_slist_foreach (molecule_bonds (molecule), print_bond, file);
+    fclose (file);
+  }
+  else {
+    // fixme -- error
+  }
 }
-#endif
+
+static void
+print_view (GtkWidget *widget, gpointer data)
+{
+  molecule_s *molecule = data;
+   GtkWidget *dialog =
+    gtk_file_chooser_dialog_new ("Print molecule",
+				 GTK_WINDOW (molecule_window (molecule)),
+				 GTK_FILE_CHOOSER_ACTION_SAVE,
+				 "Accept", GTK_RESPONSE_ACCEPT,
+				 "Cancel", GTK_RESPONSE_CANCEL,
+				 NULL);
+  gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
+  gtk_dialog_set_default_response (GTK_DIALOG (dialog),
+                                   GTK_RESPONSE_ACCEPT);
+  gtk_widget_show_all (dialog);
+  gint response = gtk_dialog_run (GTK_DIALOG (dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    gchar *file = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
+    gboolean doit = TRUE;
+    if (g_file_test (file, G_FILE_TEST_EXISTS)) {
+      GtkWidget *dialogq =
+	gtk_message_dialog_new (GTK_WINDOW (molecule_window (molecule)),
+				GTK_DIALOG_MODAL,
+				GTK_MESSAGE_QUESTION,
+				GTK_BUTTONS_YES_NO,
+				"File %s exists.  Overwrite it?",
+				file);
+      gtk_widget_show_all (dialogq);
+      response = gtk_dialog_run (GTK_DIALOG (dialogq));
+      if (response != GTK_RESPONSE_YES) doit = FALSE;
+      gtk_widget_destroy (dialogq);
+    }
+    if (doit) print_molecule (molecule, file);
+    g_free (file);
+  }
+  gtk_widget_destroy (dialog);
+}
 
 static gboolean
 zoom_changed (GtkRange *range,
@@ -859,9 +912,9 @@ open_molecule_window (gpointer data, gpointer user_data)
 		      G_CALLBACK (export_sgi), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
-    item = gtk_menu_item_new_with_label ("Print");
+    item = gtk_menu_item_new_with_label ("Print view...");
     g_signal_connect (G_OBJECT (item), "activate",
-		      G_CALLBACK (print_molecule), molecule);
+		      G_CALLBACK (print_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
     item = gtk_separator_menu_item_new();

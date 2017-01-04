@@ -19,12 +19,14 @@ typedef struct {
   double   x;
   double   y;
   double   z;
+  int      seq;
   char    *name;
   radii_s *data;
 } atom_s;
-#define atom_x(a) ((a)->x)
-#define atom_y(a) ((a)->y)
-#define atom_z(a) ((a)->z)
+#define atom_x(a)    ((a)->x)
+#define atom_y(a)    ((a)->y)
+#define atom_z(a)    ((a)->z)
+#define atom_seq(a)  ((a)->seq)
 #define atom_name(a) ((a)->name)
 #define atom_data(a) ((a)->data)
 

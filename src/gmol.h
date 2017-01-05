@@ -54,6 +54,13 @@ typedef struct {
 #define bond_strength(p)	((p)->strength)
 #define bond_separation(p)	((p)->separation)
 
+typedef struct {
+  GLfloat red;
+  GLfloat green;
+  GLfloat blue;
+  GLfloat alpha;
+} GLcolour_s;
+
 typedef struct _molecule_s {
   GSList *atoms;
   GSList *bonds;
@@ -68,6 +75,7 @@ typedef struct _molecule_s {
   gdouble voff;
   gdouble hoff;
   gdouble radius;
+  GLcolour_s bgcolour;
 } molecule_s;
 #define molecule_atoms(m)	((m)->atoms)
 #define molecule_bonds(m)	((m)->bonds)
@@ -82,5 +90,10 @@ typedef struct _molecule_s {
 #define molecule_voff(m)	((m)->voff)
 #define molecule_hoff(m)	((m)->hoff)
 #define molecule_radius(m)	((m)->radius)
+#define molecule_bgcolour(m)	((m)->bgcolour)
+#define molecule_bgred(m)	((m)->bgcolour.red)
+#define molecule_bggreen(m)	((m)->bgcolour.green)
+#define molecule_bgblue(m)	((m)->bgcolour.blue)
+#define molecule_bgalpha(m)	((m)->bgcolour.alpha)
 
 #endif /* GMOL_H */

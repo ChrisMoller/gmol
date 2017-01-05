@@ -38,6 +38,10 @@ static GSList 		*molecules	= NULL;
 #define INITIAL_ZOOM	1.0
 #define INITIAL_LATITUDE	0.0
 #define INITIAL_LONGITUDE	0.0
+#define DEFAULT_BG_RED		1.0
+#define DEFAULT_BG_GREEN	0.8
+#define DEFAULT_BG_BLUE		0.8
+#define DEFAULT_BG_ALPHA	0.0
 
 #define deg_to_rad(d) (((d) * M_PI) / 180.0)
 #define rad_to_deg(r) (((r) * 180.0) / M_PI)
@@ -269,7 +273,10 @@ gl_render (GtkGLArea *area,
 	   gpointer      user_data)
 {
   molecule_s *molecule = user_data;
-  glClearColor (0, 0, 0, 0);
+  glClearColor (molecule_bgred (molecule),
+		molecule_bggreen (molecule),
+		molecule_bgblue (molecule),
+		molecule_bgalpha (molecule));
   glClearDepth (1.0);
 
   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -446,6 +453,10 @@ read_file (gchar *fn)
 	  molecule_voff (molecule)	= 0.0;
 	  molecule_hoff (molecule)	= 0.0;
 	  molecule_radius (molecule)	= AR_SCALE;
+	  molecule_bgred (molecule)	= DEFAULT_BG_RED;
+	  molecule_bggreen (molecule)	= DEFAULT_BG_GREEN;
+	  molecule_bgblue (molecule)	= DEFAULT_BG_BLUE;
+	  molecule_bgalpha (molecule)	= DEFAULT_BG_ALPHA;
 	  molecules = g_slist_append (molecules, molecule);
 	  GtkTreeIter   iter;
 	  gtk_list_store_append (store, &iter);
@@ -558,6 +569,16 @@ print_structure (GtkWidget *widget, gpointer data)
 }
 
 static void
+begin_print (GtkPrintOperation *operation,
+	     GtkPrintContext   *context,
+	     gpointer           user_data)
+{
+  molecule_s *molecule = user_data;
+  gtk_gl_area_queue_render (molecule_area (molecule));
+  gtk_print_operation_set_n_pages (operation, 1);
+}
+
+static void
 draw_page (GtkPrintOperation *operation,
 	   GtkPrintContext   *context,
 	   gint               page_nr,
@@ -565,7 +586,7 @@ draw_page (GtkPrintOperation *operation,
 {
   molecule_s *molecule = user_data;
 
-  g_print ("page %d\n", page_nr);
+    
   
   cairo_t *cr = gtk_print_context_get_cairo_context (context);
   GtkGLArea *area = molecule_area (molecule);
@@ -587,23 +608,41 @@ draw_page (GtkPrintOperation *operation,
 
   // https://cairographics.org/manual/cairo-Image-Surfaces.html#cairo-format-t
   int stride = cairo_format_stride_for_width (CAIRO_FORMAT_ARGB32, ww);
+  
+  unsigned char *flipped = g_malloc0 (4 * ww * wh);
+  unsigned char *from = buffer;
+  unsigned char *to   = flipped + (wh - 1) * stride;
+  for (int row = 0; row < wh; row++, to -= stride, from += stride)
+    memmove (to, from, stride);
                             
   cairo_surface_t *surface =
-    cairo_image_surface_create_for_data (buffer,
+    cairo_image_surface_create_for_data (flipped,
 					 CAIRO_FORMAT_ARGB32,
 					 ww,
 					 wh,
 					 stride);
-  cairo_set_source_surface (cr, surface, ww, wh);
+  cairo_set_source_surface (cr, surface, 0.0, 0.0);
+  cairo_paint (cr);
   
   cairo_surface_finish (surface);
+  //  cairo_surface_destroy (surface);
   g_free (buffer);
+  g_free (flipped);
 }
 
 static void
 print_view (GtkWidget *widget, gpointer data)
 {
   molecule_s *molecule = data;
+
+  /***
+      this is to make the bg white for printing, just to save ink
+  ***/
+  GLcolour_s old_bgcolour;
+  memcpy (&old_bgcolour, &molecule_bgcolour (molecule), sizeof(GLcolour_s));
+  molecule_bgred (molecule)   = 1.0;
+  molecule_bggreen (molecule) = 1.0;
+  molecule_bgblue (molecule)  = 1.0;
   static GtkPrintSettings *settings = NULL;
 
   GtkPrintOperation *print;
@@ -614,9 +653,8 @@ print_view (GtkWidget *widget, gpointer data)
   if (settings != NULL)
     gtk_print_operation_set_print_settings (print, settings);
 
-#if 0
-  g_signal_connect (print, "begin_print", G_CALLBACK (begin_print), NULL);
-#endif
+  g_signal_connect (print, "begin_print",
+		    G_CALLBACK (begin_print), molecule);
   g_signal_connect (print, "draw_page",
 		    G_CALLBACK (draw_page), molecule);
 
@@ -625,20 +663,14 @@ print_view (GtkWidget *widget, gpointer data)
 				 GTK_WINDOW (molecule_window (molecule)),
 				 NULL);
 
-  g_print ("res = %d\n", res);
-  switch (res) {
-  case GTK_PRINT_OPERATION_RESULT_ERROR: g_print ("error\n"); break;
-  case GTK_PRINT_OPERATION_RESULT_APPLY: g_print ("apply\n"); break;
-  case GTK_PRINT_OPERATION_RESULT_CANCEL: g_print ("cancel\n"); break;
-  case GTK_PRINT_OPERATION_RESULT_IN_PROGRESS: g_print ("prog\n"); break;
-  }
-  
   if (res == GTK_PRINT_OPERATION_RESULT_APPLY) {
     if (settings != NULL) g_object_unref (settings);
     settings = g_object_ref (gtk_print_operation_get_print_settings (print));
   }
 
   g_object_unref (print);
+  memcpy (&molecule_bgcolour (molecule), &old_bgcolour, sizeof(GLcolour_s));
+  gtk_gl_area_queue_render (molecule_area (molecule));
 }
 
 static gboolean

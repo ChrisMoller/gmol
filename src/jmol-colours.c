@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <GL/freeglut.h>
 #include "gmol.h"
 
 typedef struct {

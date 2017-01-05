@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <GL/freeglut.h>
 #include <math.h>
 
 #include "gmol.h"

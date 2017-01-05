@@ -32,7 +32,6 @@ typedef struct {
 
 static void open_molecule_window (gpointer data, gpointer user_data);
 
-static GtkWidget	*window		= NULL;
 static GSList 		*molecules	= NULL;
 
 #define AR_SCALE	0.5
@@ -220,11 +219,13 @@ static void
 draw_atom (gpointer data, gpointer user_data)
 {
   atom_s *atom = data;
+  molecule_s *molecule = atom_molecule (atom);
   rotation_s *rotation = user_data;
   double red = 0.0;
   double green = 1.0;
   double blue = 0.0;
   radii_s *rad = atom_data (atom);
+  double ar_scale = molecule_radius (molecule);
 
   get_jmol_colour (atom, &red, &green, &blue);
   
@@ -234,13 +235,13 @@ draw_atom (gpointer data, gpointer user_data)
   glTranslated (atom_x (atom), 
 		atom_y (atom), 
 		atom_z (atom));
-  glutSolidSphere (rad ? (AR_SCALE * tp_ar (rad)) : 0.0, 30, 30);
+  glutSolidSphere (rad ? (ar_scale * tp_ar (rad)) : 0.0, 30, 30);
 
 #define FONT_SCALE 0.004
   
   glColor3d (0.0, 1.0, 1.0);
   glRotated (rotation->theta, rotation->x, rotation->y, rotation->z);
-  glTranslated (0.0, 0.0, AR_SCALE * tp_ar (rad));
+  glTranslated (0.0, 0.0, ar_scale * tp_ar (rad));
   glScaled (FONT_SCALE,  FONT_SCALE,  FONT_SCALE);
 
   float bounds[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -275,9 +276,6 @@ gl_render (GtkGLArea *area,
   glMatrixMode (GL_MODELVIEW);
   glPushMatrix ();
 
-
-  
-  
   double zoom		= molecule_zoom (molecule);
   double latitude	= deg_to_rad (molecule_latitude (molecule));
   double longitude	= deg_to_rad (molecule_longitude (molecule));
@@ -356,6 +354,7 @@ read_file (gchar *fn)
     if (buffer) *buffer = 0;
     char_ct = getline (&buffer, &buffer_len, xyz);	// read atom count
     if (char_ct > 0) {
+      molecule = malloc (sizeof(molecule_s));
       int count = atoi (buffer);
       if (count > 0) {
 	char  *comment = NULL;
@@ -388,6 +387,7 @@ read_file (gchar *fn)
 	     sym[k] = 0;
 	     atom_name (atom) = strdup (sym);	// copy in the raw symbol
 	     atom_data (atom) = get_rad_data (sym);
+	     atom_molecule (atom) = molecule;
 	     atoms = g_slist_append (atoms, atom);
 	  }
 	}
@@ -431,7 +431,6 @@ read_file (gchar *fn)
 	  char *slash = strrchr (fn, '/');
 	  slash = slash ? slash+1 : fn;
 	  
-	  molecule = malloc (sizeof(molecule_s));
 	  molecule_atoms (molecule)	= atoms;
 	  molecule_bonds (molecule)	= bonds;
 	  molecule_comment (molecule)	= comment;
@@ -446,6 +445,7 @@ read_file (gchar *fn)
 	  molecule_longitude (molecule)	= INITIAL_LONGITUDE;
 	  molecule_voff (molecule)	= 0.0;
 	  molecule_hoff (molecule)	= 0.0;
+	  molecule_radius (molecule)	= AR_SCALE;
 	  molecules = g_slist_append (molecules, molecule);
 	  GtkTreeIter   iter;
 	  gtk_list_store_append (store, &iter);
@@ -457,8 +457,13 @@ read_file (gchar *fn)
 			      -1);
 	}
 	else {
+	  if (molecule) free (molecule);
 	  // fixme -- error
 	}
+      }
+      else {
+	if (molecule) free (molecule);
+	// fixme -- error
       }
     }
     fclose (xyz);
@@ -515,11 +520,11 @@ print_molecule (molecule_s *molecule, gchar *fn)
 }
 
 static void
-print_view (GtkWidget *widget, gpointer data)
+print_structure (GtkWidget *widget, gpointer data)
 {
   molecule_s *molecule = data;
-   GtkWidget *dialog =
-     gtk_file_chooser_dialog_new (_("Print molecule"),
+  GtkWidget *dialog =
+    gtk_file_chooser_dialog_new (_("Print molecule"),
 				 GTK_WINDOW (molecule_window (molecule)),
 				 GTK_FILE_CHOOSER_ACTION_SAVE,
 				  _ ("Accept"), GTK_RESPONSE_ACCEPT,
@@ -550,6 +555,104 @@ print_view (GtkWidget *widget, gpointer data)
     g_free (file);
   }
   gtk_widget_destroy (dialog);
+}
+
+static void
+draw_page (GtkPrintOperation *operation,
+	   GtkPrintContext   *context,
+	   gint               page_nr,
+	   gpointer           user_data)
+{
+  molecule_s *molecule = user_data;
+
+  g_print ("page %d\n", page_nr);
+  
+  cairo_t *cr = gtk_print_context_get_cairo_context (context);
+  GtkGLArea *area = molecule_area (molecule);
+  gtk_gl_area_make_current (area);
+  int ww = gtk_widget_get_allocated_width (GTK_WIDGET (area));
+  int wh = gtk_widget_get_allocated_height (GTK_WIDGET (area));
+
+  unsigned char *buffer = g_malloc0 (4 * ww * wh);
+  glReadBuffer (GL_BACK_LEFT);
+
+  // https://www.opengl.org/sdk/docs/man/html/glReadPixels.xhtml
+  glReadPixels (0,                     // GLint x,
+	        0,                     // GLint y,
+	        ww,                    // GLsizei width,
+	        wh,                    // GLsizei height,
+	        GL_BGRA,                // enum format,
+	        GL_UNSIGNED_BYTE,      // GLenum type,
+	        buffer);
+
+  // https://cairographics.org/manual/cairo-Image-Surfaces.html#cairo-format-t
+  int stride = cairo_format_stride_for_width (CAIRO_FORMAT_ARGB32, ww);
+                            
+  cairo_surface_t *surface =
+    cairo_image_surface_create_for_data (buffer,
+					 CAIRO_FORMAT_ARGB32,
+					 ww,
+					 wh,
+					 stride);
+  cairo_set_source_surface (cr, surface, ww, wh);
+  
+  cairo_surface_finish (surface);
+  g_free (buffer);
+}
+
+static void
+print_view (GtkWidget *widget, gpointer data)
+{
+  molecule_s *molecule = data;
+  static GtkPrintSettings *settings = NULL;
+
+  GtkPrintOperation *print;
+  GtkPrintOperationResult res;
+
+  print = gtk_print_operation_new ();
+
+  if (settings != NULL)
+    gtk_print_operation_set_print_settings (print, settings);
+
+#if 0
+  g_signal_connect (print, "begin_print", G_CALLBACK (begin_print), NULL);
+#endif
+  g_signal_connect (print, "draw_page",
+		    G_CALLBACK (draw_page), molecule);
+
+  res = gtk_print_operation_run (print,
+				 GTK_PRINT_OPERATION_ACTION_PRINT_DIALOG,
+				 GTK_WINDOW (molecule_window (molecule)),
+				 NULL);
+
+  g_print ("res = %d\n", res);
+  switch (res) {
+  case GTK_PRINT_OPERATION_RESULT_ERROR: g_print ("error\n"); break;
+  case GTK_PRINT_OPERATION_RESULT_APPLY: g_print ("apply\n"); break;
+  case GTK_PRINT_OPERATION_RESULT_CANCEL: g_print ("cancel\n"); break;
+  case GTK_PRINT_OPERATION_RESULT_IN_PROGRESS: g_print ("prog\n"); break;
+  }
+  
+  if (res == GTK_PRINT_OPERATION_RESULT_APPLY) {
+    if (settings != NULL) g_object_unref (settings);
+    settings = g_object_ref (gtk_print_operation_get_print_settings (print));
+  }
+
+  g_object_unref (print);
+}
+
+static gboolean
+radius_changed (GtkRange *range,
+	      GtkScrollType scroll,
+	      gdouble       value,
+	      gpointer user_data)
+{
+  molecule_s *molecule = user_data;
+  if (molecule) {
+    molecule_radius (molecule) = value;
+    gtk_gl_area_queue_render (molecule_area (molecule));
+  }
+  return FALSE;		// do other stuff if needed
 }
 
 static gboolean
@@ -770,17 +873,10 @@ import_view (GtkWidget *widget, gpointer data)
   gtk_widget_show_all (dialog);
   gint response = gtk_dialog_run (GTK_DIALOG (dialog));
   if (response == GTK_RESPONSE_ACCEPT) {
-#if 1
     GSList *filenames =
       gtk_file_chooser_get_filenames (GTK_FILE_CHOOSER (dialog));
     g_slist_foreach (filenames, open_files, NULL);
     g_slist_free_full (filenames, g_free);
-#else
-    gchar *file = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
-    molecule_s *molecule = read_file (file);
-    if (molecule) open_molecule_window (molecule, NULL);
-    g_free (file);
-#endif
   }
   gtk_widget_destroy (dialog);
 }
@@ -877,7 +973,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   GtkAdjustment *adj;
   molecule_s *molecule = data;
   
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  GtkWidget *window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   molecule_window (molecule) = window;
   g_signal_connect (window, "destroy", G_CALLBACK (close_view), molecule);
   gtk_window_set_title (GTK_WINDOW (window), molecule_file (molecule));
@@ -922,6 +1018,11 @@ open_molecule_window (gpointer data, gpointer user_data)
 		      G_CALLBACK (print_view), molecule);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
+    item = gtk_menu_item_new_with_label (_ ("Print structure..."));
+    g_signal_connect (G_OBJECT (item), "activate",
+		      G_CALLBACK (print_structure), molecule);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
@@ -938,6 +1039,17 @@ open_molecule_window (gpointer data, gpointer user_data)
   GtkWidget *grid = gtk_grid_new ();
   gtk_box_pack_start (GTK_BOX (vbox), grid, TRUE, TRUE, 2);
 
+  /***** atomic radius *****/
+
+  thingy = gtk_scale_new_with_range (GTK_ORIENTATION_HORIZONTAL,
+				     0.0, 1.5, 0.01);
+  gtk_widget_set_tooltip_text (thingy, "Atomic radius");
+  gtk_scale_set_draw_value (GTK_SCALE (thingy), FALSE);
+  gtk_range_set_value (GTK_RANGE (thingy), AR_SCALE);
+  g_signal_connect (thingy, "change-value",
+		    G_CALLBACK (radius_changed), molecule);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 0, 1, 1);
+
   /***** zoom *****/
   adj = gtk_adjustment_new (INITIAL_ZOOM,	// gdouble value,
 			    0.1,	// gdouble lower,
@@ -949,7 +1061,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Zoom");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (zoom_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 0, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 1, 1, 1);
 
 
   /***** open gl area *****/
@@ -971,7 +1083,7 @@ open_molecule_window (gpointer data, gpointer user_data)
 		    G_CALLBACK (gl_realise), molecule);
   g_signal_connect (gl_area, "resize",
 		    G_CALLBACK (gl_resize), molecule);
-  gtk_grid_attach (GTK_GRID(grid), gl_area, 0, 1, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), gl_area, 0, 2, 1, 1);
 
   /***** latitude *****/
   adj = gtk_adjustment_new (molecule_latitude (molecule),
@@ -984,7 +1096,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Latitude");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (latitude_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 1, 1, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 1, 2, 1, 1);
 
   /***** voff *****/
   adj = gtk_adjustment_new (molecule_voff (molecule),
@@ -997,7 +1109,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Vertical offset");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (voff_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 2, 1, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 2, 2, 1, 1);
 
   /***** longitude *****/
   adj = gtk_adjustment_new (molecule_longitude (molecule),
@@ -1010,7 +1122,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Longitude");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (longitude_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 2, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 3, 1, 1);
 
   /***** hoff *****/
   adj = gtk_adjustment_new (molecule_hoff (molecule),
@@ -1023,7 +1135,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Horizontalal offset");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (hoff_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 3, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 4, 1, 1);
 
   gtk_widget_show_all (window);
 }
@@ -1103,7 +1215,7 @@ main (int ac, char *av[])
     g_slist_foreach (molecules, open_molecule_window, NULL);
   }
 
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  GtkWidget *window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   gtk_window_set_default_size (GTK_WINDOW (window), 256, 256);
   gtk_window_set_title (GTK_WINDOW (window), "gmol");
 

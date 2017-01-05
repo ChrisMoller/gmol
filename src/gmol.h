@@ -1,6 +1,8 @@
 #ifndef GMOL_H
 #define GMOL_H
 
+struct _molecule_s;
+
 typedef struct {
   int atomic_nr;
   char *element_symbol;
@@ -22,13 +24,15 @@ typedef struct {
   int      seq;
   char    *name;
   radii_s *data;
+  struct _molecule_s *molecule;
 } atom_s;
-#define atom_x(a)    ((a)->x)
-#define atom_y(a)    ((a)->y)
-#define atom_z(a)    ((a)->z)
-#define atom_seq(a)  ((a)->seq)
-#define atom_name(a) ((a)->name)
-#define atom_data(a) ((a)->data)
+#define atom_x(a)	((a)->x)
+#define atom_y(a)	((a)->y)
+#define atom_z(a)	((a)->z)
+#define atom_seq(a)	((a)->seq)
+#define atom_name(a)	((a)->name)
+#define atom_data(a)	((a)->data)
+#define atom_molecule(a)	((a)->molecule)
 
 typedef enum {
   BOND_NONE,
@@ -50,7 +54,7 @@ typedef struct {
 #define bond_strength(p)	((p)->strength)
 #define bond_separation(p)	((p)->separation)
 
-typedef struct {
+typedef struct _molecule_s {
   GSList *atoms;
   GSList *bonds;
   char   *comment;
@@ -63,6 +67,7 @@ typedef struct {
   gdouble longitude;
   gdouble voff;
   gdouble hoff;
+  gdouble radius;
 } molecule_s;
 #define molecule_atoms(m)	((m)->atoms)
 #define molecule_bonds(m)	((m)->bonds)
@@ -76,5 +81,6 @@ typedef struct {
 #define molecule_longitude(m)	((m)->longitude)
 #define molecule_voff(m)	((m)->voff)
 #define molecule_hoff(m)	((m)->hoff)
+#define molecule_radius(m)	((m)->radius)
 
 #endif /* GMOL_H */

@@ -47,10 +47,10 @@ GdkRGBA default_bg_rgba = {DEFAULT_BG_RED,
 			   DEFAULT_BG_GREEN,
 			   DEFAULT_BG_BLUE,
 			   DEFAULT_BG_ALPHA};
-#define default_bg_red   (GLfloat)default_bg_rgba.red
-#define default_bg_green (GLfloat)default_bg_rgba.green
-#define default_bg_blue  (GLfloat)default_bg_rgba.blue
-#define default_bg_alpha (GLfloat)default_bg_rgba.alpha
+#define default_bg_red   default_bg_rgba.red
+#define default_bg_green default_bg_rgba.green
+#define default_bg_blue  default_bg_rgba.blue
+#define default_bg_alpha default_bg_rgba.alpha
 
 #define deg_to_rad(d) (((d) * M_PI) / 180.0)
 #define rad_to_deg(r) (((r) * 180.0) / M_PI)
@@ -282,10 +282,10 @@ gl_render (GtkGLArea *area,
 	   gpointer      user_data)
 {
   molecule_s *molecule = user_data;
-  glClearColor (molecule_bgred (molecule),
-		molecule_bggreen (molecule),
-		molecule_bgblue (molecule),
-		molecule_bgalpha (molecule));
+  glClearColor ((GLfloat)molecule_bgred (molecule),
+		(GLfloat)molecule_bggreen (molecule),
+		(GLfloat)molecule_bgblue (molecule),
+		(GLfloat)molecule_bgalpha (molecule));
   glClearDepth (1.0);
 
   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -647,8 +647,8 @@ print_view (GtkWidget *widget, gpointer data)
   /***
       this is to make the bg white for printing, just to save ink
   ***/
-  GLcolour_s old_bgcolour;
-  memcpy (&old_bgcolour, &molecule_bgcolour (molecule), sizeof(GLcolour_s));
+  GdkRGBA old_bgcolour;
+  memcpy (&old_bgcolour, &molecule_bgcolour (molecule), sizeof(GdkRGBA));
   molecule_bgred (molecule)   = 1.0;
   molecule_bggreen (molecule) = 1.0;
   molecule_bgblue (molecule)  = 1.0;
@@ -678,7 +678,7 @@ print_view (GtkWidget *widget, gpointer data)
   }
 
   g_object_unref (print);
-  memcpy (&molecule_bgcolour (molecule), &old_bgcolour, sizeof(GLcolour_s));
+  memcpy (&molecule_bgcolour (molecule), &old_bgcolour, sizeof(GdkRGBA));
   gtk_gl_area_queue_render (molecule_area (molecule));
 }
 
@@ -1007,6 +1007,53 @@ close_view (GtkWidget *widget, gpointer data)
   if (window) gtk_widget_destroy (window);
 }
 
+static gboolean
+set_appearance (GtkWidget *window, molecule_s *molecule)
+{
+  GtkWidget *dialog;
+  GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+  dialog = gtk_dialog_new_with_buttons (_ ("Default background colour"),
+					GTK_WINDOW (window),
+					flags,
+					_("_OK"), GTK_RESPONSE_ACCEPT,
+					_("_Cancel"), GTK_RESPONSE_REJECT,
+					NULL);
+  gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
+  gtk_dialog_set_default_response (GTK_DIALOG (dialog),
+                                   GTK_RESPONSE_ACCEPT);
+
+  GtkWidget *content = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+
+  GtkWidget *colour_chooser = gtk_color_chooser_widget_new ();
+  gtk_color_chooser_set_rgba (GTK_COLOR_CHOOSER (colour_chooser),
+			      molecule ?
+			      &molecule_bgcolour (molecule) :
+			      &default_bg_rgba);
+  gtk_container_add (GTK_CONTAINER (content), colour_chooser);
+
+  gtk_widget_show_all (dialog);
+  int response = gtk_dialog_run (GTK_DIALOG (dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    GdkRGBA colour;
+    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (colour_chooser), &colour);
+    GdkRGBA *dst =  molecule ?
+      &molecule_bgcolour (molecule) :
+      &default_bg_rgba;
+    memcpy (dst, &colour, sizeof(GdkRGBA));
+    if (molecule) gtk_gl_area_queue_render (molecule_area (molecule));
+  }
+  gtk_widget_destroy (dialog);
+  
+  return FALSE;		// do other stuff if needed
+}
+
+static gboolean
+set_molecule_appearance (GtkWidget *widget, gpointer data)
+{
+  molecule_s *molecule = data;
+  return set_appearance (molecule_window (molecule), molecule);
+}
+
 static void
 open_molecule_window (gpointer data, gpointer user_data)
 {
@@ -1074,6 +1121,19 @@ open_molecule_window (gpointer data, gpointer user_data)
 
     gtk_box_pack_start (GTK_BOX (vbox), GTK_WIDGET (menubar),
 			FALSE, FALSE, 2);
+
+    /************ settings menu **********/
+
+    menu = gtk_menu_new();
+
+    item = gtk_menu_item_new_with_label (_ ("Settings"));
+    gtk_menu_item_set_submenu (GTK_MENU_ITEM (item), menu);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menubar), item);
+
+    item = gtk_menu_item_new_with_label (_ ("Appearance..."));
+    g_signal_connect (G_OBJECT (item), "activate",
+		      G_CALLBACK (set_molecule_appearance), molecule);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
   }
 
@@ -1200,43 +1260,10 @@ row_activated (GtkTreeView *tree_view,
 }
 
 static gboolean
-set_appearance (GtkWidget *widget, gpointer data)
+set_default_appearance (GtkWidget *widget, gpointer data)
 {
   GtkWidget *window = data;
-  GtkWidget *dialog;
-  GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
-  dialog = gtk_dialog_new_with_buttons (_ ("Default background colour"),
-					GTK_WINDOW (window),
-					flags,
-					_("_OK"), GTK_RESPONSE_ACCEPT,
-					_("_Cancel"), GTK_RESPONSE_REJECT,
-					NULL);
-  gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
-  gtk_dialog_set_default_response (GTK_DIALOG (dialog),
-                                   GTK_RESPONSE_ACCEPT);
-
-  GtkWidget *content = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
-
-  GtkWidget *colour_chooser = gtk_color_chooser_widget_new ();
-  gtk_color_chooser_set_rgba (GTK_COLOR_CHOOSER (colour_chooser),
-			      &default_bg_rgba);
-  gtk_container_add (GTK_CONTAINER (content), colour_chooser);
-  
-
-
-  gtk_widget_show_all (dialog);
-  int response = gtk_dialog_run (GTK_DIALOG (dialog));
-  if (response == GTK_RESPONSE_ACCEPT) {
-    GdkRGBA colour;
-    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (colour_chooser), &colour);
-    default_bg_rgba.red = colour.red;
-    default_bg_rgba.green = colour.green;
-    default_bg_rgba.blue = colour.blue;
-    default_bg_rgba.alpha = colour.alpha;
-  }
-  gtk_widget_destroy (dialog);
-  
-  return FALSE;		// do other stuff if needed
+  return set_appearance (window, NULL);
 }
 
 int
@@ -1354,7 +1381,7 @@ main (int ac, char *av[])
 
     item = gtk_menu_item_new_with_label (_ ("Appearance..."));
     g_signal_connect (G_OBJECT (item), "activate",
-		      G_CALLBACK (set_appearance), window);
+		      G_CALLBACK (set_default_appearance), window);
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
   }
 

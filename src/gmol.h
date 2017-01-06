@@ -54,15 +54,6 @@ typedef struct {
 #define bond_strength(p)	((p)->strength)
 #define bond_separation(p)	((p)->separation)
 
-#if 0
-typedef struct {
-  GLfloat red;
-  GLfloat green;
-  GLfloat blue;
-  GLfloat alpha;
-} GLcolour_s;
-#endif
-
 typedef struct _molecule_s {
   GSList *atoms;
   GSList *bonds;

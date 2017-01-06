@@ -41,7 +41,16 @@ static GSList 		*molecules	= NULL;
 #define DEFAULT_BG_RED		1.0
 #define DEFAULT_BG_GREEN	0.8
 #define DEFAULT_BG_BLUE		0.8
-#define DEFAULT_BG_ALPHA	0.0
+#define DEFAULT_BG_ALPHA	1.0
+
+GdkRGBA default_bg_rgba = {DEFAULT_BG_RED,
+			   DEFAULT_BG_GREEN,
+			   DEFAULT_BG_BLUE,
+			   DEFAULT_BG_ALPHA};
+#define default_bg_red   (GLfloat)default_bg_rgba.red
+#define default_bg_green (GLfloat)default_bg_rgba.green
+#define default_bg_blue  (GLfloat)default_bg_rgba.blue
+#define default_bg_alpha (GLfloat)default_bg_rgba.alpha
 
 #define deg_to_rad(d) (((d) * M_PI) / 180.0)
 #define rad_to_deg(r) (((r) * 180.0) / M_PI)
@@ -453,10 +462,10 @@ read_file (gchar *fn)
 	  molecule_voff (molecule)	= 0.0;
 	  molecule_hoff (molecule)	= 0.0;
 	  molecule_radius (molecule)	= AR_SCALE;
-	  molecule_bgred (molecule)	= DEFAULT_BG_RED;
-	  molecule_bggreen (molecule)	= DEFAULT_BG_GREEN;
-	  molecule_bgblue (molecule)	= DEFAULT_BG_BLUE;
-	  molecule_bgalpha (molecule)	= DEFAULT_BG_ALPHA;
+	  molecule_bgred (molecule)	= default_bg_red;
+	  molecule_bggreen (molecule)	= default_bg_green;
+	  molecule_bgblue (molecule)	= default_bg_blue;
+	  molecule_bgalpha (molecule)	= default_bg_alpha;
 	  molecules = g_slist_append (molecules, molecule);
 	  GtkTreeIter   iter;
 	  gtk_list_store_append (store, &iter);
@@ -1190,6 +1199,46 @@ row_activated (GtkTreeView *tree_view,
   }
 }
 
+static gboolean
+set_appearance (GtkWidget *widget, gpointer data)
+{
+  GtkWidget *window = data;
+  GtkWidget *dialog;
+  GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+  dialog = gtk_dialog_new_with_buttons (_ ("Default background colour"),
+					GTK_WINDOW (window),
+					flags,
+					_("_OK"), GTK_RESPONSE_ACCEPT,
+					_("_Cancel"), GTK_RESPONSE_REJECT,
+					NULL);
+  gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_MOUSE);
+  gtk_dialog_set_default_response (GTK_DIALOG (dialog),
+                                   GTK_RESPONSE_ACCEPT);
+
+  GtkWidget *content = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+
+  GtkWidget *colour_chooser = gtk_color_chooser_widget_new ();
+  gtk_color_chooser_set_rgba (GTK_COLOR_CHOOSER (colour_chooser),
+			      &default_bg_rgba);
+  gtk_container_add (GTK_CONTAINER (content), colour_chooser);
+  
+
+
+  gtk_widget_show_all (dialog);
+  int response = gtk_dialog_run (GTK_DIALOG (dialog));
+  if (response == GTK_RESPONSE_ACCEPT) {
+    GdkRGBA colour;
+    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (colour_chooser), &colour);
+    default_bg_rgba.red = colour.red;
+    default_bg_rgba.green = colour.green;
+    default_bg_rgba.blue = colour.blue;
+    default_bg_rgba.alpha = colour.alpha;
+  }
+  gtk_widget_destroy (dialog);
+  
+  return FALSE;		// do other stuff if needed
+}
+
 int
 main (int ac, char *av[])
 {
@@ -1256,7 +1305,7 @@ main (int ac, char *av[])
   GtkWidget *vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 8);
   gtk_container_add (GTK_CONTAINER (window), vbox);
 
-   {
+  {
     GtkWidget *menubar;
     GtkWidget *menu;
     GtkWidget *item;
@@ -1266,6 +1315,7 @@ main (int ac, char *av[])
     /********* file menu ********/
 
     menu = gtk_menu_new();
+
     item = gtk_menu_item_new_with_label (_ ("File"));
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (item), menu);
     gtk_menu_shell_append (GTK_MENU_SHELL (menubar), item);
@@ -1293,9 +1343,22 @@ main (int ac, char *av[])
 
     gtk_box_pack_start (GTK_BOX (vbox), GTK_WIDGET (menubar),
 			FALSE, FALSE, 2);
-   }
 
-   {
+    /************ settings menu **********/
+
+    menu = gtk_menu_new();
+
+    item = gtk_menu_item_new_with_label (_ ("Settings"));
+    gtk_menu_item_set_submenu (GTK_MENU_ITEM (item), menu);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menubar), item);
+
+    item = gtk_menu_item_new_with_label (_ ("Appearance..."));
+    g_signal_connect (G_OBJECT (item), "activate",
+		      G_CALLBACK (set_appearance), window);
+    gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+  }
+
+  {
      GtkWidget *sw = gtk_scrolled_window_new (NULL, NULL);
      gtk_box_pack_start (GTK_BOX (vbox), GTK_WIDGET (sw), TRUE, TRUE, 2);
 

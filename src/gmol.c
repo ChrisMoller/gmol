@@ -264,7 +264,10 @@ draw_atom (gpointer data, gpointer user_data)
   glutSolidSphere (rad ? (ar_scale * tp_ar (rad)) : 0.0, 30, 30);
 
 #define FONT_SCALE 0.004
-  
+
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+  glDisable(GL_LIGHTING);
+  glDisable(GL_DEPTH_TEST);
   glColor3d ((GLdouble)molecule_lblred (molecule),
 	     (GLdouble)molecule_lblgreen (molecule),
 	     (GLdouble)molecule_lblblue (molecule));
@@ -278,7 +281,8 @@ draw_atom (gpointer data, gpointer user_data)
   glTranslatef ((bounds[0] - bounds[3]) / 2.0f,
 		(bounds[1] - bounds[4]) / 2.0f,
 		0.0f);
-  ftglRenderFont (font[fontindex], atom_name (atom), FTGL_RENDER_FRONT);
+  ftglRenderFont (font[fontindex], atom_name (atom), FTGL_RENDER_ALL);
+  glPopAttrib();
   glPopMatrix();
 }
 

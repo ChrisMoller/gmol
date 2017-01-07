@@ -68,11 +68,8 @@ typedef struct _molecule_s {
   gdouble voff;
   gdouble hoff;
   gdouble radius;
-#if 1
   GdkRGBA bgcolour;
-#else
-  GLcolour_s bgcolour;
-#endif
+  GdkRGBA lblcolour;
 } molecule_s;
 #define molecule_atoms(m)	((m)->atoms)
 #define molecule_bonds(m)	((m)->bonds)
@@ -92,5 +89,10 @@ typedef struct _molecule_s {
 #define molecule_bggreen(m)	((m)->bgcolour.green)
 #define molecule_bgblue(m)	((m)->bgcolour.blue)
 #define molecule_bgalpha(m)	((m)->bgcolour.alpha)
+#define molecule_lblcolour(m)	((m)->lblcolour)
+#define molecule_lblred(m)	((m)->lblcolour.red)
+#define molecule_lblgreen(m)	((m)->lblcolour.green)
+#define molecule_lblblue(m)	((m)->lblcolour.blue)
+#define molecule_lblalpha(m)	((m)->lblcolour.alpha)
 
 #endif /* GMOL_H */

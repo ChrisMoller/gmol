@@ -42,6 +42,10 @@ static GSList 		*molecules	= NULL;
 #define DEFAULT_BG_GREEN	0.8
 #define DEFAULT_BG_BLUE		0.8
 #define DEFAULT_BG_ALPHA	1.0
+#define DEFAULT_LBL_RED		0.0
+#define DEFAULT_LBL_GREEN	1.0
+#define DEFAULT_LBL_BLUE	1.0
+#define DEFAULT_LBL_ALPHA	1.0
 
 GdkRGBA default_bg_rgba = {DEFAULT_BG_RED,
 			   DEFAULT_BG_GREEN,
@@ -51,6 +55,15 @@ GdkRGBA default_bg_rgba = {DEFAULT_BG_RED,
 #define default_bg_green default_bg_rgba.green
 #define default_bg_blue  default_bg_rgba.blue
 #define default_bg_alpha default_bg_rgba.alpha
+
+GdkRGBA default_lbl_rgba = {DEFAULT_LBL_RED,
+			    DEFAULT_LBL_GREEN,
+			    DEFAULT_LBL_BLUE,
+			    DEFAULT_LBL_ALPHA};
+#define default_lbl_red   default_lbl_rgba.red
+#define default_lbl_green default_lbl_rgba.green
+#define default_lbl_blue  default_lbl_rgba.blue
+#define default_lbl_alpha default_lbl_rgba.alpha
 
 #define deg_to_rad(d) (((d) * M_PI) / 180.0)
 #define rad_to_deg(r) (((r) * 180.0) / M_PI)
@@ -252,7 +265,9 @@ draw_atom (gpointer data, gpointer user_data)
 
 #define FONT_SCALE 0.004
   
-  glColor3d (0.0, 1.0, 1.0);
+  glColor3d ((GLdouble)molecule_lblred (molecule),
+	     (GLdouble)molecule_lblgreen (molecule),
+	     (GLdouble)molecule_lblblue (molecule));
   glRotated (rotation->theta, rotation->x, rotation->y, rotation->z);
   glTranslated (0.0, 0.0, ar_scale * tp_ar (rad));
   glScaled (FONT_SCALE,  FONT_SCALE,  FONT_SCALE);
@@ -466,6 +481,10 @@ read_file (gchar *fn)
 	  molecule_bggreen (molecule)	= default_bg_green;
 	  molecule_bgblue (molecule)	= default_bg_blue;
 	  molecule_bgalpha (molecule)	= default_bg_alpha;
+	  molecule_lblred (molecule)	= default_lbl_red;
+	  molecule_lblgreen (molecule)	= default_lbl_green;
+	  molecule_lblblue (molecule)	= default_lbl_blue;
+	  molecule_lblalpha (molecule)	= default_lbl_alpha;
 	  molecules = g_slist_append (molecules, molecule);
 	  GtkTreeIter   iter;
 	  gtk_list_store_append (store, &iter);
@@ -1024,22 +1043,51 @@ set_appearance (GtkWidget *window, molecule_s *molecule)
 
   GtkWidget *content = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
 
-  GtkWidget *colour_chooser = gtk_color_chooser_widget_new ();
-  gtk_color_chooser_set_rgba (GTK_COLOR_CHOOSER (colour_chooser),
-			      molecule ?
-			      &molecule_bgcolour (molecule) :
-			      &default_bg_rgba);
-  gtk_container_add (GTK_CONTAINER (content), colour_chooser);
+  GtkWidget *grid = gtk_grid_new ();
+  gtk_container_add (GTK_CONTAINER (content), grid);
 
+  GtkWidget *thingy;
+  GtkWidget *bg_button;
+  GtkWidget *lbl_button;
+
+  thingy = gtk_label_new (_ ("Background colour"));
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 0, 1, 1);
+  
+  bg_button = gtk_color_button_new_with_rgba (molecule ?
+					      &molecule_bgcolour (molecule) :
+					      &default_bg_rgba);
+  gtk_color_button_set_title (GTK_COLOR_BUTTON (bg_button),
+			      _ ("Background colour"));
+  gtk_grid_attach (GTK_GRID(grid), bg_button, 1, 0, 1, 1);
+
+
+  thingy = gtk_label_new (_ ("Label colour"));
+  gtk_grid_attach (GTK_GRID(grid), thingy, 2, 0, 1, 1);
+  
+  lbl_button = gtk_color_button_new_with_rgba (molecule ?
+					       &molecule_lblcolour (molecule) :
+					       &default_lbl_rgba);
+  gtk_color_button_set_title (GTK_COLOR_BUTTON (lbl_button),
+			      _ ("Label colour"));
+  gtk_grid_attach (GTK_GRID(grid), lbl_button, 3, 0, 1, 1);
+
+
+
+  
   gtk_widget_show_all (dialog);
   int response = gtk_dialog_run (GTK_DIALOG (dialog));
   if (response == GTK_RESPONSE_ACCEPT) {
     GdkRGBA colour;
-    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (colour_chooser), &colour);
-    GdkRGBA *dst =  molecule ?
-      &molecule_bgcolour (molecule) :
-      &default_bg_rgba;
+    GdkRGBA *dst;
+
+    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (bg_button), &colour);
+    dst =  molecule ? &molecule_bgcolour (molecule) : &default_bg_rgba;
     memcpy (dst, &colour, sizeof(GdkRGBA));
+
+    gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (lbl_button), &colour);
+    dst =  molecule ? &molecule_lblcolour (molecule) : &default_lbl_rgba;
+    memcpy (dst, &colour, sizeof(GdkRGBA));
+
     if (molecule) gtk_gl_area_queue_render (molecule_area (molecule));
   }
   gtk_widget_destroy (dialog);
@@ -1085,7 +1133,7 @@ open_molecule_window (gpointer data, gpointer user_data)
 
     item = gtk_menu_item_new_with_label (_ ("Import XYZ..."));
     g_signal_connect (G_OBJECT (item), "activate",
-		      G_CALLBACK (import_view), molecule);
+		      G_CALLBACK (import_view), molecule_window (molecule));
     gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 
     item = gtk_separator_menu_item_new();
@@ -1162,7 +1210,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Zoom");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (zoom_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 1, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 1, 0, 1, 1);
 
 
   /***** open gl area *****/
@@ -1184,7 +1232,7 @@ open_molecule_window (gpointer data, gpointer user_data)
 		    G_CALLBACK (gl_realise), molecule);
   g_signal_connect (gl_area, "resize",
 		    G_CALLBACK (gl_resize), molecule);
-  gtk_grid_attach (GTK_GRID(grid), gl_area, 0, 2, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), gl_area, 0, 1, 2, 1);
 
   /***** latitude *****/
   adj = gtk_adjustment_new (molecule_latitude (molecule),
@@ -1197,7 +1245,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Latitude");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (latitude_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 1, 2, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 2, 1, 1, 1);
 
   /***** voff *****/
   adj = gtk_adjustment_new (molecule_voff (molecule),
@@ -1210,7 +1258,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Vertical offset");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (voff_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 2, 2, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 3, 1, 1, 1);
 
   /***** longitude *****/
   adj = gtk_adjustment_new (molecule_longitude (molecule),
@@ -1223,7 +1271,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Longitude");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (longitude_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 3, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 2, 2, 1);
 
   /***** hoff *****/
   adj = gtk_adjustment_new (molecule_hoff (molecule),
@@ -1236,7 +1284,7 @@ open_molecule_window (gpointer data, gpointer user_data)
   gtk_widget_set_tooltip_text (thingy, "Horizontalal offset");
   g_signal_connect (thingy, "change-value",
 		    G_CALLBACK (hoff_changed), molecule);
-  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 4, 1, 1);
+  gtk_grid_attach (GTK_GRID(grid), thingy, 0, 3, 2, 1);
 
   gtk_widget_show_all (window);
 }
@@ -1311,13 +1359,6 @@ main (int ac, char *av[])
   fontindex = 0;
 
   for (int i = 1; i < ac; i++) read_file (av[i]);
-#if 0
-  if (molecules) {
-    g_print ("Molecules:\n\n");
-    g_slist_foreach (molecules, dump_molecule, NULL);
-  }
-#endif
-
   
   if (molecules) {
     g_slist_foreach (molecules, open_molecule_window, NULL);
